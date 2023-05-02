@@ -69,7 +69,7 @@
 67,X,X,Hydra's Whisper,,Explosive Charge,,Colonial,Utility,4,3,1,1,5,100,40,0,0,0
 68,X,X,Listening Kit,,Equipment,,Both,Utility,4,4,1,1,3,120,0,0,0,0
 69,X,X,Radio Backpack,,,,Both,Utility,4,5,1,1,5,150,0,0,0,0
-70,X,X,Alligator Charge,,Explosive Charge,,Both,Utility,4,6,1,1,5,100,0,0,15,0
+70,X,X,Alligator Charge,,Explosive Charge,,Warden Utility,Utility,4,6,1,1,10,150,80,0,0,0
 71,X,X,Shovel,,,,Both,Utility,4,7,1,1,10,200,0,0,0,0
 72,X,X,Sledge Hammer,Sledge,,,Both,Utility,4,8,1,1,10,200,0,0,0,0
 73,X,X,Abisme AT-99,AT Mine,Explosive Charge,,Both,Utility,4,9,1,1,10,100,10,0,0,0
@@ -89,10 +89,9 @@
 87,X,X,Diesel,Diesel,,,Both,Resource,6,1,1,1,1,,,,,
 88,X,X,Petrol,Petrol,,,Both,Resource,6,2,1,1,1,,,,,
 89,X,X,Aluminum Alloy,,,,Both,Resource,6,3,1,1,20,,,,,
-90,X,X,Bunker Supplies,Bsups,,,Both,Resource,6,4,1,1,150,75,0,0,0,0
 91,X,X,Basic Materials,Bmats,,,Both,Resource,6,5,1,1,100,,,,,
 92,X,X,Explosive Materials,Emats,,,Both,Resource,6,6,1,1,20,,,,,
-93,X,X,Garrison Supplies,Gsups,,,Both,Resource,6,7,1,1,150,75,0,0,0,0
+93,X,X,Maintenance Supplies,Msups,,,Both,Resource,6,7,1,1,100,250,0,0,0,0
 94,X,X,Heavy Explosive Materials,Hemats,,,Both,Resource,6,8,1,1,20,,,,,
 95,X,X,Iron Alloy,,,,Both,Resource,6,9,1,1,20,,,,,
 96,X,X,Refined Materials,Rmats,,,Both,Resource,6,10,1,1,20,,,,,
@@ -213,7 +212,7 @@
 214,X,X,Malone Ratcatcher Mk. 1,,,,Warden,Heavy Arms,2,29,1,1,5,,,,,
 215,X,-,Copper,,,,Both,Resource,6,19,1,0,,,,,,
 216,X,X,Copper Alloy,,,,Both,Resource,6,20,1,1,,,,,,
-217,,,O'Brien V.113 Gravekeeper,,Armoured Car,,Warden,Vehicle,8,9,1,1,5,,,,,
+217,X,X,O'Brien V.113 Gravekeeper,,Armoured Car,,Warden,Vehicle,8,9,1,1,5,,,,,
 218,X,X,"T8 ""Gemini""",,Armoured Car,,Colonial,Vehicle,8,10,1,1,5,,,,,
 219,X,X,KLG901-2 Lunaire F,,Grenade Launcher,,Colonial,Heavy Arms,2,25,1,1,10,50,,5,,
 220,,,The Ospreay,,Grenade Launcher,,Warden,Utility,4,20,1,1,20,85,,10,,
@@ -240,11 +239,11 @@
 241,X,,Water Bucket,,,,Both,Utility,4,21,1,1,,,,,,
 242,,,Willow's Bane Model 845,,,,Warden,Heavy Arms,2,30,1,1,,,,,,
 243,,,Willow's Bane Ammo,,,,Warden,Utility,4,22,1,1,,,,,,
-244,,,"""Molten Wind"" v.II Flame Torch",,,,Colonial,Heavy Arms,2,31,1,1,,,,,,
-245,,,"""Molten Wind"" v.II Ammo",,,,Colonial,Utility,4,23,1,1,,,,,,
+244,,,""Molten Wind"" v.II Flame Torch,,,,Colonial,Heavy Arms,2,31,1,1,,,,,,
+245,,,""Molten Wind"" v.II Ammo,,,,Colonial,Utility,4,23,1,1,,,,,,
 246,,,3C-High Explosive Rocket,,,,Colonial,Heavy Ammunition,3,9,1,1,,,,,,
-247,,,"R-17 ""Retiarius"" Skirmisher",,,,Colonial,Vehicle,8,80,1,1,,,,,,
-248,,,"DAE 3b-2 ""Hades' Net""",,,,Colonial,Shippables,9,11,1,1,,,,,,
+247,,,R-17 ""Retiarius"" Skirmisher,,,,Colonial,Vehicle,8,80,1,1,,,,,,
+248,,,DAE 3b-2 ""Hades' Net"",,,,Colonial,Shippables,9,11,1,1,,,,,,
 249,,,Gallagher Thornfall Mk. VI,,Cruiser Tank,,Warden,Vehicle,8,81,1,1,,,,,,
 250,,,4C-Fire Rocket,,,,Warden,Heavy Ammunition,3,10,1,1,,,,,,
 251,,,Flame Ammo,,,,Both,Heavy Ammunition,3,11,1,1,,,,,,
@@ -253,18 +252,31 @@
 254,,,Assembly Materials III,,,,Both,Resource,6,35,1,1,,,,,,
 255,,,Assembly Materials IV,,,,Both,Resource,6,36,1,1,,,,,,
 256,,,Assembly Materials V,,,,Both,Resource,6,37,1,1,,,,,,
-257,,,"DAE 1o-3 ""Polybolos""",,,,Colonial,Shippables,9,12,1,1,,,,,,
+257,,,DAE 1o-3 ""Polybolos"",,,,Colonial,Shippables,9,12,1,1,,,,,,
 258,,,Huber Starbreaker 94.5mm,,,,Warden,Shippables,9,13,1,1,,,,,,
-259,,,"DAE 2a-1 ""Ruptura""",,,,Colonial,Shippables,9,14,1,1,,,,,,
+259,,,DAE 2a-1 ""Ruptura"",,,,Colonial,Shippables,9,14,1,1,,,,,,
 260,,,Fuel Container,,,,Both,Shippables,9,15,1,1,,,,,,
 261,,,Material Pallet,,,,Both,Shippables,9,16,1,1,,,,,,
 262,,,Pipe,,,,Both,Resource,6,38,1,1,,,,,,
-263,,,"85V-g ""Talos""",,,,Colonial,Vehicle,8,82,1,1,,,,,,
-264,,,"T14 ""Vesta"" Tankette",,,,Colonial,Vehicle,8,83,1,1,,,,,,
+263,,,85V-g ""Talos"",,,,Colonial,Vehicle,8,82,1,1,,,,,,
+264,,,T14 ""Vesta"" Tankette,,,,Colonial,Vehicle,8,83,1,1,,,,,,
 265,,,O'Brien V. 130 Wild Jack,,,,Warden,Vehicle,8,84,1,1,,,,,,
 266,,,Noble Firebrand Mk. XVII,,,,Warden,Vehicle,8,85,1,1,,,,,,
 267,,,"945g ""Stygian Bolt""",,,,Colonial,Vehicle,8,86,1,1,,,,,,
 268,,,Balfour Stockade 75mm,,,,Warden,Vehicle,8,87,1,1,,,,,,
 269,,,Rycker 4/3-F Wasp Nest,,,,Warden,Vehicle,8,88,1,1,,,,,,
 270,,,Niska-Rycker Mk. IX Skycaller,,,,Warden,Vehicle,8,89,1,1,,,,,,
-271,,,"H-19 ""Vulcan""",,,,Colonial,Vehicle,8,90,1,1,,,,,,
+271,,,H-19 ""Vulcan"",,,,Colonial,Vehicle,8,90,1,1,,,,,,
+272,,,Havoc Charge,,,,Both,Utility,4,24,1,1,5,75,,10,,
+273,,,Havoc Charge Detonator,,,,Both,Utility,4,25,1,1,5,75,,5,,
+274,,,Mounted Fissura gd.I,Fissura,Grenade Launcher,,Colonial,Heavy Arms,2,32,1,1,5,100,,5,,
+275,,,Silverhand Lordscar - Mk. X,,,,Warden,Vehicle,8,91,1,1,,,,,,
+276,,,O'Brien V.190 Knave,,,,Warden,Vehicle,8,92,1,1,,,,,,
+277,,,Dunne Dousing Engine 3r,,,,Warden,Vehicle,8,93,1,1,,,,,,
+278,,,R-12b "Salva",,,,Colonial,Vehicle,8,94,1,1,,,,,,
+279,,,Lance-36,,,,Colonial,Vehicle,8,95,1,1,,,,,,
+280,,,Flood Juggernaut Mk. VII,,,,Warden,Vehicle,8,96,1,1,,,,,,
+281,,,Cullen Predator Mk. III,,,,Warden,Vehicle,8,97,1,1,,,,,,
+282,,,O-75b "Ares",,,,Colonial,Vehicle,8,98,1,1,,,,,,
+283,,,Dunne Dousing Engine 3r,,,,Warden,Vehicle,8,99,1,1,,,,,,
+284,,,R-12b "Salva",,,,Colonial,Vehicle,8,100,1,1,,,,,,
