@@ -1,15 +1,13 @@
 import os
 import os.path
 import time
-import tkinter
 from tkinter import *
 from tkinter import ttk
 
-import numpy
 from PIL import ImageTk, ImageGrab, Image
 import logging
 import datetime
-from pynput.mouse import Button, Controller
+from pynput.mouse import Controller
 import glob
 import cv2
 import numpy as np
@@ -21,8 +19,11 @@ import xlsxwriter
 from tksheet import Sheet
 import requests
 import threading
+import pygetwindow as gw
 # import keyboard
 
+bestTextScale = None
+bestIconScale = None
 global stockpilename
 global PopupWindow
 global NewStockpileName
@@ -35,6 +36,10 @@ global IndOrCrateWindow
 global FilterFrame
 global LastStockpile
 global tempicon
+foxhole_height = 1080
+foxhole_width = 1920
+width_ratio = 1.0
+height_ratio = 1.0
 
 class items(object):
 	data = []
@@ -80,7 +85,7 @@ for xfile in files:
 			os.remove(str(file_path) + xfile)
 			logging.info(str(datetime.datetime.now()) + " " + str(xfile) + " log file deleted")
 
-Version = "1.4.3b"
+Version = "1.51b"
 
 StockpilerWindow = Tk()
 StockpilerWindow.title('Stockpiler ' + Version)
@@ -91,8 +96,10 @@ StockpilerWindow.resizable(width=False, height=False)
 StockpilerWindow.iconbitmap(default='Bmat.ico')
 
 
+
 class menu(object):
 	iconrow = 1
+	experimentalResizing = IntVar()
 	iconcolumn = 0
 	lastcat = 0
 	itembuttons = []
@@ -133,6 +140,7 @@ menu.scanshift.set(0)
 menu.scanctrl.set(0)
 menu.scanalt.set(0)
 menu.debug.set(0)
+menu.experimentalResizing.set(0)
 
 s = ttk.Style()
 s.theme_use('alt')
@@ -222,9 +230,6 @@ for filteritem in range(len(filter)):
 		print("failed to apply filters to items.data")
 
 
-print(items.data[1])
-
-
 ### For troubleshooting
 # data[item].extend(filter[item][1])
 # print(data)
@@ -292,27 +297,68 @@ class CreateToolTip(object):
 # Helpful for grabbing test images for assembling missing icons or new sets of icons (for modded icons)
 def GrabStockpileImage():
 	global counter
+	global bestTextScale
+	global bestIconScale
+	global foxhole_height
+	global foxhole_width
+	global width_ratio
+	global height_ratio
 	# OKAY, so you'll have to grab the whole screen, detect that thing in the upper left, then use that as a basis
 	# for cropping that full screenshot down to just the foxhole window
 
+	threshold = .95
+
+	if (menu.experimentalResizing.get() == 1):
+		print("==============EXPERIMENTAL RESIZING==============")
+		window = gw.getWindowsWithTitle("War")
+		if (len(window) > 0):
+			foxhole_height = window[0].height - 39
+			foxhole_width = window[0].width - 16
+		else:
+			print("[Warning: !!!] Foxhole window not detected")
+		print(f"Foxhole screen size is: {foxhole_width}x{foxhole_height}")
+		width_ratio = foxhole_width / 1920 
+		height_ratio = foxhole_height / 1080
+		print(f"Screen Ratio to original 1920x1080: {width_ratio}x{height_ratio}")
+				
 	screen = np.array(ImageGrab.grab(bbox=None, include_layered_windows=False, all_screens=True))
-	greyscreen = cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY)
+	screen = cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY)
 
 	numbox = cv2.imread('CheckImages//StateOf.png', cv2.IMREAD_GRAYSCALE)
-	res = cv2.matchTemplate(greyscreen, numbox, cv2.TM_CCOEFF_NORMED)
-	threshold = .95
-	if np.amax(res) > threshold:
-		stateloc = np.where(res >= threshold)
-		print(stateloc)
-		if stateloc[0].astype(int) - 35 >= 0:
-			statey = stateloc[0].astype(int) - 35
+	
+	best_score = None
+	res = None
+
+	if (menu.experimentalResizing.get() == 1):
+		if (foxhole_height == 1080): bestTextScale = 1.0
+		elif (not bestTextScale):
+			best_score, bestTextScale, res = matchTemplateBestScale(screen, numbox, numtimes=20)
+	else:
+		bestTextScale = 1.0
+	
+	if (not best_score):
+		if (menu.experimentalResizing.get() == 1): numbox = cv2.resize(numbox, (int(numbox.shape[1]*bestTextScale), int(numbox.shape[0]*bestTextScale)))
+		
+		res = cv2.matchTemplate(screen, numbox, cv2.TM_CCOEFF_NORMED)
+		best_score = np.amax(res)
+	
+	print("Best scale for TEXT is: " + str(bestTextScale) + " with a score of: " + str(best_score))
+	
+	threshold = .7
+	if best_score > threshold:
+		min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+		statex, statey = max_loc
+		margin_ratioed = 35 * height_ratio
+		if statey - margin_ratioed >= 0:
+			statey = statey - margin_ratioed
 		else:
 			statey = 0
-		if stateloc[1].astype(int) - 35 >= 0:
-			statex = stateloc[1].astype(int) - 35
+		if statex - margin_ratioed >= 0:
+			statex = statex - margin_ratioed
 		else:
 			statex = 0
-		greyscreen = greyscreen[int(statey):int(statey) + 1079, int(statex):int(statex) + 1919]
+
+		screen = screen[int(statey):int(statey + (1079 * height_ratio)), int(statex):int(statex + (1919 * width_ratio))]
 		if menu.debug.get() == 1:
 			cv2.imshow("Grabbed in image GrabStockpileImage", screen)
 			cv2.waitKey(0)
@@ -324,14 +370,26 @@ def GrabStockpileImage():
 			findshirt = cv2.imread('CheckImages//Modded//86.png', cv2.IMREAD_GRAYSCALE)
 
 		# Shirts are always in the same spot in every stockpile, but might be single or crates
+		if (menu.experimentalResizing.get() == 1):
+			if (bestIconScale == None):
+				if (foxhole_height == 1080):
+					bestIconScale = 1.0
+					print("Best scale for ITEM ICONS is: " + str(bestIconScale))
+				else:
+					best_score, bestIconScale, resC = matchTemplateBestScale(screen, findshirtC, numtimes=20)
+					print("Best scale for ITEM ICONS is: " + str(bestIconScale) + " with a score of: " + str(best_score))
+			else:
+				print("Best scale for ITEM ICONS is: " + str(bestIconScale))
+			findshirtC = cv2.resize(findshirtC, (int(findshirtC.shape[1]*bestIconScale), int(findshirtC.shape[0]*bestIconScale)))
+			findshirt = cv2.resize(findshirt, (int(findshirt.shape[1]*bestIconScale), int(findshirt.shape[0]*bestIconScale)))
 		try:
-			resC = cv2.matchTemplate(greyscreen, findshirtC, cv2.TM_CCOEFF_NORMED)
+			resC = cv2.matchTemplate(screen, findshirtC, cv2.TM_CCOEFF_NORMED)
 		except Exception as e:
 			print("Exception: ", e)
 			print("Maybe you don't have the shirt crate")
 			logging.info(str(datetime.datetime.now()) + " Exception loading shirt crate icon in GrabStockpileImage " + str(e))
 		try:
-			res = cv2.matchTemplate(greyscreen, findshirt, cv2.TM_CCOEFF_NORMED)
+			res = cv2.matchTemplate(screen, findshirt, cv2.TM_CCOEFF_NORMED)
 		except Exception as e:
 			print("Exception: ", e)
 			print("Maybe you don't have the individual shirt")
@@ -476,6 +534,40 @@ def Learn(LearnInt, image):
 			cv2.imshow("No numboxes?", screen)
 			cv2.waitKey(0)
 
+import numpy as np
+import cv2
+
+def matchTemplateBestScale(screen, icon, method=cv2.TM_CCOEFF_NORMED, numtimes=10):
+
+	print("Finding best scale to resize icons, this may take a while...")
+	best_score = -np.inf
+	best_scale = None
+	final_res = None
+
+	scales=None
+	if (foxhole_height < 1080):
+		scales = np.linspace(0.5, 1.0, numtimes)[::-1]
+	else:
+		scales = np.linspace(1.0, 2.0, numtimes)[::-1]
+
+	for scale in scales:
+        # resize the icon according to the scale
+		icon_resized = cv2.resize(icon, (int(icon.shape[1]*scale), int(icon.shape[0]*scale)))
+
+        # if the resized icon is larger than the screen, skip this scale
+		if icon_resized.shape[0] > screen.shape[0] or icon_resized.shape[1] > screen.shape[1]:
+			continue
+	
+		res = cv2.matchTemplate(screen, icon_resized, method)
+		score = np.amax(res)
+        
+		if score > best_score:
+			best_score = score
+			best_scale = scale
+			final_res = res
+
+	return best_score, best_scale, final_res
+
 
 def SearchImage(Pass, LearnImage):
 	global stockpilename
@@ -483,30 +575,73 @@ def SearchImage(Pass, LearnImage):
 	global PopupWindow
 	global CurrentStockpileName
 	global threadnum
+	global foxhole_height
+	global foxhole_width
+	global height_ratio
+	global width_ratio
+	global bestTextScale
+	screen = None
 
 	if Pass != "":
 		screen = LearnImage
 	else:
 		try:
+			
+			
+			if (menu.experimentalResizing.get() == 1):
+				print("==============EXPERIMENTAL RESIZING==============")
+				window = gw.getWindowsWithTitle("War")
+				if (len(window) > 0):
+					foxhole_height = window[0].height - 39
+					foxhole_width = window[0].width - 16
+				else:
+					print("[Warning: !!!] Foxhole window not detected")
+				print(f"Foxhole screen size is: {foxhole_width}x{foxhole_height}")
+				width_ratio = foxhole_width / 1920 
+				height_ratio = foxhole_height / 1080
+				print(f"Screen Ratio to original 1920x1080: {width_ratio}x{height_ratio}")
+				
 			# OKAY, so you'll have to grab the whole screen, detect that thing in the upper left, then use that as a basis
 			# for cropping that full screenshot down to just the foxhole window
 			screen = np.array(ImageGrab.grab(bbox=None, include_layered_windows=False, all_screens=True))
 			screen = cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY)
 
 			numbox = cv2.imread('CheckImages//StateOf.png', cv2.IMREAD_GRAYSCALE)
-			res = cv2.matchTemplate(screen, numbox, cv2.TM_CCOEFF_NORMED)
-			threshold = .95
-			if np.amax(res) > threshold:
-				stateloc = np.where(res >= threshold)
-				if stateloc[0].astype(int) - 35 >= 0:
-					statey = stateloc[0].astype(int) - 35
+			
+			best_score = None
+			res = None
+
+			if (menu.experimentalResizing.get() == 1):
+				if (foxhole_height == 1080): bestTextScale = 1.0
+				elif (not bestTextScale):
+					best_score, bestTextScale, res = matchTemplateBestScale(screen, numbox, numtimes=20)
+			else:
+				bestTextScale = 1.0
+			
+			if (not best_score):
+				if (menu.experimentalResizing.get() == 1): numbox = cv2.resize(numbox, (int(numbox.shape[1]*bestTextScale), int(numbox.shape[0]*bestTextScale)))
+				
+				res = cv2.matchTemplate(screen, numbox, cv2.TM_CCOEFF_NORMED)
+				best_score = np.amax(res)
+			
+			print("Best scale for TEXT is: " + str(bestTextScale) + " with a score of: " + str(best_score))
+			
+			threshold = .7
+			if best_score > threshold:
+				min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+				statex, statey = max_loc
+				margin_ratioed = 35 * height_ratio
+				if statey - margin_ratioed >= 0:
+					statey = statey - margin_ratioed
 				else:
 					statey = 0
-				if stateloc[1].astype(int) - 35 >= 0:
-					statex = stateloc[1].astype(int) - 35
+				if statex - margin_ratioed >= 0:
+					statex = statex - margin_ratioed
 				else:
 					statex = 0
-				screen = screen[int(statey):int(statey) + 1079, int(statex):int(statex) + 1919]
+				
+				screen = screen[int(statey):int(statey + (1079 * height_ratio)), int(statex):int(statex + (1919 * width_ratio))]
+
 				print("It thinks it found the window position in SearchImage and is grabbing location: X:", str(statex),
 					  " Y:", str(statey))
 				if menu.debug.get() == 1:
@@ -539,9 +674,29 @@ def SearchImage(Pass, LearnImage):
 
 def ItemScan(screen, garbage):
 	global LastStockpile
+	global bestTextScale
+	global bestIconScale
+
+	resC = None
+	res = None
 	if menu.Set.get() == 0:
 		findshirtC = cv2.imread('CheckImages//Default//86C.png', cv2.IMREAD_GRAYSCALE)
 		findshirt = cv2.imread('CheckImages//Default//86.png', cv2.IMREAD_GRAYSCALE)
+
+		if (menu.experimentalResizing.get() == 1):
+			if (bestIconScale == None):
+				if (foxhole_height == 1080):
+					bestIconScale = 1.0
+					print("Best scale for ITEM ICONS is: " + str(bestIconScale))
+				else:
+					best_score, bestIconScale, resC = matchTemplateBestScale(screen, findshirtC, numtimes=20)
+					print("Best scale for ITEM ICONS is: " + str(bestIconScale) + " with a score of: " + str(best_score))
+			else:
+				print("Best scale for ITEM ICONS is: " + str(bestIconScale))
+			findshirtC = cv2.resize(findshirtC, (int(findshirtC.shape[1]*bestIconScale), int(findshirtC.shape[0]*bestIconScale)))
+			findshirt = cv2.resize(findshirt, (int(findshirt.shape[1]*bestIconScale), int(findshirt.shape[0]*bestIconScale)))
+
+			
 	else:
 		try:
 			findshirtC = cv2.imread('CheckImages//Modded//86C.png', cv2.IMREAD_GRAYSCALE)
@@ -556,7 +711,7 @@ def ItemScan(screen, garbage):
 			print("You don't have the individual Shirt yet in ItemScan")
 			logging.info(str(datetime.datetime.now()) + " Failed loading modded individual shirt icon in ItemScan " + str(e))
 	try:
-		resC = cv2.matchTemplate(screen, findshirtC, cv2.TM_CCOEFF_NORMED)
+		if (resC == None): resC = cv2.matchTemplate(screen, findshirtC, cv2.TM_CCOEFF_NORMED)
 	except Exception as e:
 		print("Exception: ", e)
 		print("Looks like you're missing the shirt crate in ItemScan")
@@ -567,7 +722,7 @@ def ItemScan(screen, garbage):
 		print("Exception: ", e)
 		print("Looks like you're missing the individual shirts in ItemScan")
 		logging.info(str(datetime.datetime.now()) + " Maybe missing individual shirt icon in ItemScan " + str(e))
-	threshold = .99
+	threshold = .9
 	FoundShirt = False
 	try:
 		if np.amax(res) > threshold:
@@ -581,6 +736,7 @@ def ItemScan(screen, garbage):
 	try:
 		if np.amax(resC) > threshold:
 			print("Found Shirt Crate")
+			#print(np.amax(resC))
 			y, x = np.unravel_index(resC.argmax(), resC.shape)
 			FoundShirt = True
 	except Exception as e:
@@ -616,82 +772,95 @@ def ItemScan(screen, garbage):
 					  ('Checkimages//Encampment.png', 'Encampment', 6),
 					  ('Checkimages//SafeHouse.png', 'Safe House', 7))
 	# Check cropped stockpile image for each location type image
+	FoundStockpileType = None
+	FoundStockpileTypeName = None
+	highestScore = 0
+	y = 0
+	x = 0
 	for image in StockpileTypes:
 		try:
 			findtype = cv2.imread(image[0], cv2.IMREAD_GRAYSCALE)
 			if menu.debug.get() == 1:
 				cv2.imshow("Looking for this", findtype)
 				cv2.waitKey(0)
+			if (menu.experimentalResizing.get() == 1): findtype = cv2.resize(findtype, (int(findtype.shape[1]*bestTextScale), int(findtype.shape[0]*bestTextScale)))
 			res = cv2.matchTemplate(stockpile, findtype, cv2.TM_CCOEFF_NORMED)
 			# Threshold is a bit lower for types as they are slightly see-thru
-			typethreshold = .95
-			# print("Checking:", image[1])
-			if np.amax(res) > typethreshold:
+			typethreshold = .65
+			score = np.amax(res)
+			#print("Checking:", image[1])
+			#print(score)
+			if (score > typethreshold and score > highestScore):
+				highestScore = score
 				y, x = np.unravel_index(res.argmax(), res.shape)
 				FoundStockpileType = image[2]
 				FoundStockpileTypeName = image[1]
-				# print(image[1])
-				if image[1] == "Seaport" or image[1] == "Storage Depot":
-					findtab = cv2.imread('CheckImages//Tab.png', cv2.IMREAD_GRAYSCALE)
-					res = cv2.matchTemplate(stockpile, findtab, cv2.TM_CCOEFF_NORMED)
-					tabthreshold = .95
-					if np.amax(res) > tabthreshold:
-						print("Found the Tab")
-						y, x = np.unravel_index(res.argmax(), res.shape)
-						# Seaports and Storage Depots have the potential to have named stockpiles, so grab the name
-						stockpilename = stockpile[y - 5:y + 17, x - 150:x - 8]
-						# Make a list of all current stockpile name images
-						currentstockpiles = glob.glob("Stockpiles/*.png")
-						# print(currentstockpiles)
-						found = 0
-						for image in currentstockpiles:
-							stockpilelabel = cv2.imread(image, cv2.IMREAD_GRAYSCALE)
-							if not image.endswith("image.png"):
-								res = cv2.matchTemplate(stockpilename, stockpilelabel, cv2.TM_CCOEFF_NORMED)
-								threshold = .99
-								flag = False
-								if np.amax(res) > threshold:
-									# Named stockpile is one already seen
-									found = 1
-									ThisStockpileName = (image[11:(len(image) - 4)])
-						if found != 1:
-							newstockpopup(stockpilename)
-							PopupWindow.wait_window()
-							if NewStockpileName == "" or NewStockpileName.lower() == "public":
-								popup("BlankName")
-								ThisStockpileName = "TheyLeftTheStockpileNameBlank"
-							else:
-								# NewStockpileFilename = 'Stockpiles//' + NewStockpileName + '.png'
-								# It's a new stockpile, so save an images of the name as well as the cropped stockpile itself
-								cv2.imwrite('Stockpiles//' + NewStockpileName + '.png', stockpilename)
-								if menu.ImgExport.get() == 1:
-									cv2.imwrite('Stockpiles//' + NewStockpileName + ' image.png', stockpile)
-								ThisStockpileName = NewStockpileName
-					else:
-						# It's not a named stockpile, so just call it by the type of location (Bunker Base, Encampment, etc)
-						print("Didn't find the Tab, so it looks like it's not a named stockpile")
-						ThisStockpileName = FoundStockpileTypeName
-				else:
-					# It's not a named stockpile, so just call it by the type of location (Bunker Base, Encampment, etc)
-					print("Not a named stockpile, it's a Bunker Base, Encampment, something like that")
-					ThisStockpileName = FoundStockpileTypeName
-				# StockpileName = StockpileNameEntry.get()
-				# cv2.imwrite('Stockpiles//' + StockpileName + '.png', stockpilename)
-				break
-			else:
-				# print("Didn't find",image[1])
-				print("Doesn't look like any known stockpile type")
-				FoundStockpileType = "None"
-				ThisStockpileName = "None"
-				pass
+			
 		except Exception as e:
 			print("Exception: ", e)
 			print("Probably not looking at a stockpile or don't have the game open.  Looked for: ", str(image))
-			FoundStockpileType = "None"
-			ThisStockpileName = "None"
+			FoundStockpileType = None
+			ThisStockpileName = None
 			logging.info(str(datetime.datetime.now()) + " Probably not looking at a stockpile or don't have the game open.")
 			logging.info(str(datetime.datetime.now()) + " Looked for: ", str(image) + str(e))
 			pass
+	
+	if (FoundStockpileType != None):
+		if FoundStockpileTypeName == "Seaport" or FoundStockpileTypeName == "Storage Depot":
+			findtab = cv2.imread('CheckImages//Tab.png', cv2.IMREAD_GRAYSCALE)
+			if (menu.experimentalResizing.get() == 1): findtab = cv2.resize(findtab, (int(findtab.shape[1]*bestTextScale), int(findtab.shape[0]*bestTextScale)))
+			res = cv2.matchTemplate(stockpile, findtab, cv2.TM_CCOEFF_NORMED)
+			tabthreshold = .6
+			cv2.imwrite('stockpile.jpg', stockpile)
+			if np.amax(res) > tabthreshold:
+				print("Found the Tab")
+				y, x = np.unravel_index(res.argmax(), res.shape)
+				# Seaports and Storage Depots have the potential to have named stockpiles, so grab the name
+				#print("bestTextScale:" + str(bestTextScale))
+				stockpilename = stockpile[int(y - 5*bestTextScale):int(y + 17*bestTextScale), int(x - 150*bestTextScale):int(x - 8*bestTextScale)]
+				# Make a list of all current stockpile name images
+				currentstockpiles = glob.glob("Stockpiles/*.png")
+				# print(currentstockpiles)
+				found = 0
+				for image in currentstockpiles:
+					stockpilelabel = cv2.imread(image, cv2.IMREAD_GRAYSCALE)
+					if not image.endswith("image.png"):
+						res = cv2.matchTemplate(stockpilename, stockpilelabel, cv2.TM_CCOEFF_NORMED)
+						threshold = .99
+						flag = False
+						if np.amax(res) > threshold:
+							# Named stockpile is one already seen
+							found = 1
+							ThisStockpileName = (image[11:(len(image) - 4)])
+				if found != 1:
+					newstockpopup(stockpilename)
+					PopupWindow.wait_window()
+					if NewStockpileName == "" or NewStockpileName.lower() == "public":
+						popup("BlankName")
+						ThisStockpileName = "TheyLeftTheStockpileNameBlank"
+					else:
+						# NewStockpileFilename = 'Stockpiles//' + NewStockpileName + '.png'
+						# It's a new stockpile, so save an images of the name as well as the cropped stockpile itself
+						cv2.imwrite('Stockpiles//' + NewStockpileName + '.png', stockpilename)
+						if menu.ImgExport.get() == 1:
+							cv2.imwrite('Stockpiles//' + NewStockpileName + ' image.png', stockpile)
+						ThisStockpileName = NewStockpileName
+			else:
+				# It's not a named stockpile, so just call it by the type of location (Bunker Base, Encampment, etc)
+				print("Didn't find the Tab, so it looks like it's not a named stockpile")
+				ThisStockpileName = FoundStockpileTypeName
+		else:
+			# It's not a named stockpile, so just call it by the type of location (Bunker Base, Encampment, etc)
+			print("Not a named stockpile, it's a Bunker Base, Encampment, something like that")
+			ThisStockpileName = FoundStockpileTypeName
+		# StockpileName = StockpileNameEntry.get()
+		# cv2.imwrite('Stockpiles//' + StockpileName + '.png', stockpilename)
+	else:
+		# print("Didn't find",image[1])
+		print("Doesn't look like any known stockpile type")
+		FoundStockpileType = "None"
+		ThisStockpileName = "None"
+		pass
 
 	# These stockpile types allow for crates (ie: Seaport)
 	CrateList = [0, 1]
@@ -737,26 +906,44 @@ def ItemScan(screen, garbage):
 			stockpilecontents = []
 			checked = 0
 			#print("StockpileImages", StockpileImages)
+			numbers = {}
+			for number in items.numbers:
+				findnum = cv2.imread(number[0], cv2.IMREAD_GRAYSCALE)
+				if (menu.experimentalResizing.get() == 1 and bestIconScale != 1.0):
+					findnum = cv2.resize(findnum, (int(findnum.shape[1] * bestIconScale), int(findnum.shape[0] * bestIconScale)))
+				numbers[number[1]] = findnum
+			
+			threshold = .98 if (menu.experimentalResizing.get() == 1 and foxhole_height != 1080) else .99   
 			for image in StockpileImages:
 				checked += 1
 				if str(image[4]) == '1':
 					if os.path.exists(image[1]):
 						try:
 							findimage = cv2.imread(image[1], cv2.IMREAD_GRAYSCALE)
+							if (menu.experimentalResizing.get() == 1 and bestIconScale != 1.0): findimage = cv2.resize(findimage, (int(findimage.shape[1] * bestIconScale), int(findimage.shape[0] * bestIconScale)), interpolation=cv2.INTER_LANCZOS4)
+							
 							res = cv2.matchTemplate(stockpile, findimage, cv2.TM_CCOEFF_NORMED)
-							threshold = .99
+							
+							#if (image[0] == "46"):
+							#	print("Item" + repr(np.amax(res)))
+							#elif (image[0] == "92"):
+							#	print("Item" + repr(np.amax(res)))
+							#elif (image[0] == "279"):
+							#	print("Item" + repr(np.amax(res)))
+							
 							flag = False
 							if np.amax(res) > threshold:
+								#print(image[1] + ": " + str(np.amax(res)))
 								flag = True
 								y, x = np.unravel_index(res.argmax(), res.shape)
 								# Found a thing, now find amount
 								numberlist = []
+								numberarea = stockpile[int(y+8*bestTextScale):int(y+28*bestTextScale), int(x+45*bestTextScale):int(x+87*bestTextScale)]
 								for number in items.numbers:
-									findnum = cv2.imread(number[0], cv2.IMREAD_GRAYSCALE)
 									# Clip the area where the stock number will be
-									numberarea = stockpile[y+8:y+28, x+45:x+87]
-									resnum = cv2.matchTemplate(numberarea, findnum, cv2.TM_CCOEFF_NORMED)
-									threshold = .90
+									
+									resnum = cv2.matchTemplate(numberarea, numbers[number[1]], cv2.TM_CCOEFF_NORMED)
+									threshold = .9
 									numloc = np.where(resnum >= threshold)
 									# It only looks for up to 3 of each number for each item, since after that it would be a "k+" scenario, which never happens in stockpiles
 									# This will need to be changed to allow for more digits whenever it does in-person looks at BB stockpiles and such, where it will show up to 5 digits
@@ -771,6 +958,7 @@ def ItemScan(screen, garbage):
 
 								# If the number ends in a K, it just adds 000 since you don't know if that's 1001 or 1999
 								# k+ never happens in stockpiles, so this only affects town halls, bunker bases, etc
+								quantity = 0
 								if len(numberlist) == 1:
 									quantity = int(str(numberlist[0][1]))
 								elif len(numberlist) == 2:
@@ -1087,7 +1275,7 @@ TableFrame = ttk.Frame(TableCanvas)
 SettingsFrame = ttk.Frame(SettingsCanvas)
 
 # create_window height for Filter canvas should be roughly: is below
-FilterCanvas.create_window((0, 0), window=FilterFrame, anchor="nw", height="2230p", width="550p")
+FilterCanvas.create_window((0, 0), window=FilterFrame, anchor="nw", height="2071p", width="550p")
 TableCanvas.create_window((0, 0), window=TableFrame, anchor="nw", height="410p", width="402p")
 SettingsCanvas.create_window((0, 0), window=SettingsFrame, anchor="nw", height="500p", width="402p")
 
@@ -1140,6 +1328,7 @@ def SaveFilter():
 		menu.scanhotkeystring = menu.scanhotkey.get()
 		exportfile.write(str(menu.grabshift.get()) + str(menu.grabctrl.get()) + str(menu.grabalt.get()) + "\n")
 		exportfile.write(str(menu.scanshift.get()) + str(menu.scanctrl.get()) + str(menu.scanalt.get()) + "\n")
+		exportfile.write(str(menu.experimentalResizing.get()) + "\n")
 	menu.grabmods = str(menu.grabshift.get()) + str(menu.grabctrl.get()) + str(menu.grabalt.get())
 	menu.scanmods = str(menu.scanshift.get()) + str(menu.scanctrl.get()) + str(menu.scanalt.get())
 	SetHotkeys("")
@@ -1172,7 +1361,6 @@ def CreateButtons(self):
 						print("Exception: ", e)
 						print(x[17])
 						print("oops", i)
-
 	sortedicons = sorted(menu.icons, key=lambda x: (x[2], x[3]))
 
 	SettingsFrame.columnconfigure(0, weight=1)
@@ -1282,6 +1470,8 @@ def CreateButtons(self):
 	menu.iconrow += 1
 	ObnoxiousCheck = ttk.Checkbutton(SettingsFrame, text="  Obnoxious\ndebug mode?", variable=menu.debug)
 	ObnoxiousCheck.grid(row=menu.iconrow, column=0, rowspan=2, padx=5)
+	ObnoxiousCheck = ttk.Checkbutton(SettingsFrame, text="  Experimental Resizing", variable=menu.experimentalResizing)
+	ObnoxiousCheck.grid(row=menu.iconrow, column=1, rowspan=2, padx=5)
 	menu.iconrow += 3
 	SaveImg = PhotoImage(file="UI/Save.png")
 	SaveButton = ttk.Button(FilterFrame, image=SaveImg, command=SaveFilter)
@@ -1640,7 +1830,7 @@ def IndividualOrCrate(num, image):
 	BigIconImage = ttk.Label(IndOrCrateFrame, image=tkimagebig)
 	BigIconImage.image = image
 	BigIconImage.grid(row=2, column=0)
-	UIimage = PhotoImage(file="Compare//" + str(num) + ".png")
+	UIimage = PhotoImage(file="Compare/" + str(num) + ".png")
 	SelectedImage = ttk.Label(IndOrCrateFrame, image=UIimage)
 	SelectedImage.image = UIimage
 	SelectedImage.grid(row=1, column=1, rowspan=2)
@@ -1750,6 +1940,7 @@ if os.path.exists("Config.txt"):
 		menu.BotHost.set(content[6])
 		menu.BotPassword.set(content[7])
 		menu.BotGuildID.set(content[8])
+		if (len(content) >= 13): menu.experimentalResizing.set(content[13])
 	except Exception as e:
 		print("Exception: ", e)
 		logging.info(str(datetime.datetime.now()) + ' Loading from config.txt failed, setting defaults')
